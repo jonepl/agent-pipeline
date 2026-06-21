@@ -20,9 +20,9 @@
 //   npx tsx .sandcastle/main.mts
 
 import * as sandcastle from "@ai-hero/sandcastle";
-import { docker } from "@ai-hero/sandcastle/sandboxes/docker";
 import { runAgent } from "../src/runAgent.js";
 import { runPlanner } from "../src/planner.js";
+import { runImplement } from "../src/implementer.js";
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -35,7 +35,7 @@ const hooks = {
   sandbox: { onSandboxReady: [{ command: "npm install" }] },
 };
 
-const copyToWorktree = ["node_modules"];
+const COPY_TO_WORKTREE = ["node_modules"];
 
 // ---------------------------------------------------------------------------
 // Main loop
@@ -70,55 +70,15 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
   // -------------------------------------------------------------------------
 
   const settled = await Promise.allSettled(
-    issues.map(async (issue) => {
-      const sandbox = await sandcastle.createSandbox({
-        branch: issue.branch,
-        sandbox: docker(),
+    issues.map((issue) =>
+      runImplement({
+        issue,
+        implementerAgent: sandcastle.claudeCode("claude-opus-4-8"),
+        reviewerAgent: sandcastle.claudeCode("claude-sonnet-4-6"),
         hooks,
-        copyToWorktree,
-      });
-
-      try {
-        const implement = await runAgent(
-          {
-            name: "implementer",
-            maxIterations: 100,
-            agent: sandcastle.claudeCode("claude-opus-4-8"),
-            promptFile: "./.sandcastle/implement-prompt.md",
-            promptArgs: {
-              TASK_ID: issue.id,
-              ISSUE_TITLE: issue.title,
-              BRANCH: issue.branch,
-            },
-          },
-          sandbox,
-        );
-
-        if (implement.commits.length > 0) {
-          const review = await runAgent(
-            {
-              name: "reviewer",
-              maxIterations: 1,
-              agent: sandcastle.claudeCode("claude-sonnet-4-6"),
-              promptFile: "./.sandcastle/review-prompt.md",
-              promptArgs: {
-                BRANCH: issue.branch,
-              },
-            },
-            sandbox,
-          );
-
-          return {
-            ...review,
-            commits: [...implement.commits, ...review.commits],
-          };
-        }
-
-        return implement;
-      } finally {
-        await sandbox.close();
-      }
-    }),
+        copyToWorktree: COPY_TO_WORKTREE,
+      }),
+    ),
   );
 
   for (const [i, outcome] of settled.entries()) {

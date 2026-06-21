@@ -20,8 +20,27 @@ Then tell me the current phase and next task.
 
 ## Setup
 
-```
-npm install
+1. Install dependencies:
+```bash
+   npm install
 ```
 
-Build, test, lint, and typecheck scripts are added in Phase 1.
+2. Copy and fill in environment variables:
+```bash
+   cp .sandcastle/.env.example .sandcastle/.env
+   # Fill in CLAUDE_CODE_OAUTH_TOKEN and GH_HOST=github.com
+```
+
+3. Build the Docker image (required before running the pipeline locally):
+```bash
+   npx sandcastle docker build-image
+```
+
+## Usage (Mode A — local)
+
+```bash
+npx tsx .sandcastle/main.mts
+```
+
+Reads open `ready`-labeled issues from this repo's GitHub Issues, 
+derives the dependency graph, and runs the pipeline locally.
