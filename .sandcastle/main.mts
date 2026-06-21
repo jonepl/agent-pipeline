@@ -21,20 +21,15 @@
 
 import * as sandcastle from "@ai-hero/sandcastle";
 import { docker } from "@ai-hero/sandcastle/sandboxes/docker";
-import { z } from "zod";
 import { runAgent } from "../src/runAgent.js";
-
-const planSchema = z.object({
-  issues: z.array(
-    z.object({ id: z.string(), title: z.string(), branch: z.string() }),
-  ),
-});
+import { runPlanner } from "../src/planner.js";
 
 // ---------------------------------------------------------------------------
 // Configuration
 // ---------------------------------------------------------------------------
 
 const MAX_ITERATIONS = 10;
+const CONCURRENCY_CAP = 1;
 
 const hooks = {
   sandbox: { onSandboxReady: [{ command: "npm install" }] },
@@ -52,16 +47,11 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
   // -------------------------------------------------------------------------
   // Phase 1: Plan
   // -------------------------------------------------------------------------
-  const plan = await runAgent({
-    hooks,
-    name: "planner",
-    maxIterations: 1,
+  const issues = await runPlanner({
+    K: CONCURRENCY_CAP,
     agent: sandcastle.claudeCode("claude-opus-4-8"),
-    promptFile: "./.sandcastle/plan-prompt.md",
-    output: sandcastle.Output.object({ tag: "plan", schema: planSchema }),
+    hooks,
   });
-
-  const issues = plan.output.issues;
 
   if (issues.length === 0) {
     console.log("No unblocked issues to work on. Exiting.");
