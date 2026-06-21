@@ -23,6 +23,11 @@ import * as sandcastle from "@ai-hero/sandcastle";
 import { runAgent } from "../src/runAgent.js";
 import { runPlanner } from "../src/planner.js";
 import { runImplement } from "../src/implementer.js";
+import { validateEnv } from "../src/validateEnv.js";
+import * as dotenv from 'dotenv';
+dotenv.config({ path: '.sandcastle/.env' });
+
+validateEnv();
 
 // ---------------------------------------------------------------------------
 // Configuration
