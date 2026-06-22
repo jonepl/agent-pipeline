@@ -15,3 +15,9 @@ Phase 1 — in progress.
 ## Next task
 Phase 2.1 — plan-as-spec artifact.
 AC: spec file present on branch; covered-requirements section non-empty.
+
+## Known behavior (not bugs)
+- Issues are not auto-closed after merge — manual `gh issue close <n>` 
+  required until Phase 3.5 implements the merge → re-plan trigger.
+- Loop runs up to 10 iterations if issue stays open — expected for 
+  the mode-A local loop at this stage.
