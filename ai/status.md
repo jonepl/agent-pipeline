@@ -11,10 +11,10 @@ Phase 1 — in progress.
 - Phase 1.2: `runPlanner` extracted; prompt uses `--label ready` + `{{K}}` cap; code-level cap enforced; 4 unit tests verify K passthrough and cap at K.
 - Phase 1.3: `issueBranchName` extracted; `runPlanner` normalizes every plan issue's branch to `issue-{id}` regardless of LLM output; 3 + 2 tests verify format, determinism, and normalization.
 - Phase 1.4: `runImplement` extracted; creates an isolated Sandcastle sandbox on `issue.branch`, runs implementer then (conditionally) reviewer, closes sandbox in `finally`; 8 tests cover sandbox creation, promptArgs, commit forwarding, reviewer gating, combined commits, and sandbox cleanup on error.
+- Phase 2.1: plan-as-spec artifact verified via issue-2 — spec drafted to `docs/specs/issue-2.md` on the `issue-2` branch with a non-empty "Requirements covered" section; `src/utils.ts` exports `multiply(a, b)` (no `any`), covered by 3 unit tests.
 
 ## Next task
-Phase 2.1 — plan-as-spec artifact.
-AC: spec file present on branch; covered-requirements section non-empty.
+Phase 2.2 — next build-plan task.
 
 ## Known behavior (not bugs)
 - Issues are not auto-closed after merge — manual `gh issue close <n>` 
