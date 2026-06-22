@@ -23,6 +23,7 @@ import * as sandcastle from "@ai-hero/sandcastle";
 import { runAgent } from "../src/runAgent.js";
 import { runPlanner } from "../src/planner.js";
 import { runImplement } from "../src/implementer.js";
+import { runPlanDraft } from "../src/planDrafter.js";
 import { validateEnv } from "../src/validateEnv.js";
 import * as dotenv from 'dotenv';
 dotenv.config({ path: '.sandcastle/.env' });
@@ -35,6 +36,8 @@ validateEnv();
 
 const MAX_ITERATIONS = 10;
 const CONCURRENCY_CAP = 1;
+// Path to the consuming repo's PRD. Override via PIPELINE_PRD_PATH env var.
+const PRD_PATH = process.env["PIPELINE_PRD_PATH"] ?? "docs/prd.md";
 
 const hooks = {
   sandbox: { onSandboxReady: [{ command: "npm install" }] },
@@ -71,11 +74,41 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
   }
 
   // -------------------------------------------------------------------------
+  // Phase 1.5: Plan draft — spec writing + evolving PR
+  // -------------------------------------------------------------------------
+
+  const planDraftSettled = await Promise.allSettled(
+    issues.map((issue) =>
+      runPlanDraft({
+        issue,
+        agent: sandcastle.claudeCode("claude-opus-4-8"),
+        prdPath: PRD_PATH,
+        hooks,
+      }),
+    ),
+  );
+
+  for (const [i, outcome] of planDraftSettled.entries()) {
+    if (outcome.status === "rejected") {
+      console.error(`  ✗ ${issues[i]!.id} plan draft failed: ${outcome.reason}`);
+    }
+  }
+
+  const draftedIssues = issues.filter(
+    (_, i) => planDraftSettled[i]?.status === "fulfilled",
+  );
+
+  if (draftedIssues.length === 0) {
+    console.log("No plan drafts succeeded. Skipping to next iteration.");
+    continue;
+  }
+
+  // -------------------------------------------------------------------------
   // Phase 2: Execute + Review
   // -------------------------------------------------------------------------
 
   const settled = await Promise.allSettled(
-    issues.map((issue) =>
+    draftedIssues.map((issue) =>
       runImplement({
         issue,
         implementerAgent: sandcastle.claudeCode("claude-opus-4-8"),
@@ -89,13 +122,13 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
   for (const [i, outcome] of settled.entries()) {
     if (outcome.status === "rejected") {
       console.error(
-        `  ✗ ${issues[i]!.id} (${issues[i]!.branch}) failed: ${outcome.reason}`,
+        `  ✗ ${draftedIssues[i]!.id} (${draftedIssues[i]!.branch}) failed: ${outcome.reason}`,
       );
     }
   }
 
   const completedIssues = settled
-    .map((outcome, i) => ({ outcome, issue: issues[i]! }))
+    .map((outcome, i) => ({ outcome, issue: draftedIssues[i]! }))
     .filter(
       (entry) =>
         entry.outcome.status === "fulfilled" &&
