@@ -12,10 +12,11 @@ Phase 3 — Mode B (Actions). Next task: 3.1 label state machine.
 - Phase 1.3: `issueBranchName` extracted; `runPlanner` normalizes every plan issue's branch to `issue-{id}` regardless of LLM output; 3 + 2 tests verify format, determinism, and normalization.
 - Phase 1.4: `runImplement` extracted; creates an isolated Sandcastle sandbox on `issue.branch`, runs implementer then (conditionally) reviewer, closes sandbox in `finally`; 8 tests cover sandbox creation, promptArgs, commit forwarding, reviewer gating, combined commits, and sandbox cleanup on error.
 - Phase 2.1 (partial — spec artifact only): `runPlanDraft` extracted; `plan-draft-prompt.md` instructs agent to write `docs/specs/issue-{id}.md` with a mandatory non-empty "Requirements covered" section citing PRD passages and commit it; validated end-to-end via issue-2. Draft PR step deferred to Phase 4.1 (belongs in mode B).
+- Phase 3.1: `src/labels.ts` defines the full label taxonomy (`LABELS` + `Label` type); `src/labelMachine.ts` defines `TRANSITIONS` (happy-path chain, each `from`/`to` unique), `applyTransition` (idempotent, no-op on wrong state), `parkIssue`, `resumeFromPark`; 13 tests directly prove single-trigger and no-double-dispatch invariants, idempotency, and the full happy-path chain.
 
 ## Next task
-Phase 3.1 — label state machine.
-AC: each label transition is driven by exactly one event/label and is idempotent (no double-dispatch).
+Phase 3.2 — one workflow per phase.
+AC: a task advances across workflow runs with state held only in GitHub.
 
 ## Notes
 - Build plan reordered 2026-06-22: gates (originally Phase 2.2–2.7) moved to Phase 4, to be wired into the Actions model Phase 3 establishes. Sequencing rationale in `docs/build-plan.md`.
