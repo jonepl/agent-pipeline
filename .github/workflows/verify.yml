@@ -1,0 +1,46 @@
+name: Verify
+
+on:
+  issues:
+    types: [labeled]
+
+jobs:
+  verify:
+    if: github.event.label.name == 'verifying'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      GH_HOST: github.com
+      ISSUE_NUMBER: ${{ github.event.issue.number }}
+      ISSUE_TITLE: ${{ github.event.issue.title }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+
+      # Verification agent (Phase 4.5) — wired here once implemented.
+      - name: Run verify agent
+        run: npx tsx .github/scripts/verify.mts
+
+      - name: Advance to awaiting-merge
+        if: success()
+        run: |
+          gh issue edit "$ISSUE_NUMBER" \
+            --add-label "awaiting-merge" \
+            --remove-label "verifying"
+
+      - name: Park on failure
+        if: failure()
+        run: |
+          gh issue edit "$ISSUE_NUMBER" --add-label "needs-human"
+          gh issue comment "$ISSUE_NUMBER" \
+            --body "Verification failed. See [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details."

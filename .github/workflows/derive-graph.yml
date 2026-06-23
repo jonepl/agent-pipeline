@@ -1,0 +1,43 @@
+name: Graph Derivation
+
+on:
+  issues:
+    types: [labeled]
+  pull_request:
+    types: [closed]
+
+jobs:
+  derive:
+    # Trigger: new ready issue, or a PR merge (Phase 3.5 wires the re-plan logic).
+    if: >
+      (github.event_name == 'issues' && github.event.label.name == 'ready') ||
+      (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
+
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      GH_HOST: github.com
+      PIPELINE_K: ${{ vars.PIPELINE_K || '1' }}
+      PIPELINE_PRD_PATH: ${{ vars.PIPELINE_PRD_PATH || 'docs/prd.md' }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+
+      - name: Derive dependency graph and label unblocked issues
+        run: npx tsx .github/scripts/derive-graph.mts
+
+      - name: Park triggering issue on failure
+        if: failure() && github.event_name == 'issues'
+        run: |
+          gh issue edit "${{ github.event.issue.number }}" --add-label "needs-human"
+          gh issue comment "${{ github.event.issue.number }}" \
+            --body "Graph derivation failed. See [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details."

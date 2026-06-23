@@ -1,0 +1,47 @@
+name: Plan Draft
+
+on:
+  issues:
+    types: [labeled]
+
+jobs:
+  draft:
+    if: github.event.label.name == 'ready-to-plan'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: write
+      pull-requests: write
+
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      GH_HOST: github.com
+      ISSUE_NUMBER: ${{ github.event.issue.number }}
+      ISSUE_TITLE: ${{ github.event.issue.title }}
+      PIPELINE_PRD_PATH: ${{ vars.PIPELINE_PRD_PATH || 'docs/prd.md' }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+
+      - name: Write spec and open draft PR
+        run: npx tsx .github/scripts/draft-plan.mts
+
+      - name: Advance to awaiting-plan-approval
+        if: success()
+        run: |
+          gh issue edit "$ISSUE_NUMBER" \
+            --add-label "awaiting-plan-approval" \
+            --remove-label "ready-to-plan"
+
+      - name: Park on failure
+        if: failure()
+        run: |
+          gh issue edit "$ISSUE_NUMBER" --add-label "needs-human"
+          gh issue comment "$ISSUE_NUMBER" \
+            --body "Plan draft failed. See [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details."

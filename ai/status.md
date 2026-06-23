@@ -13,10 +13,11 @@ Phase 3 — Mode B (Actions). Next task: 3.1 label state machine.
 - Phase 1.4: `runImplement` extracted; creates an isolated Sandcastle sandbox on `issue.branch`, runs implementer then (conditionally) reviewer, closes sandbox in `finally`; 8 tests cover sandbox creation, promptArgs, commit forwarding, reviewer gating, combined commits, and sandbox cleanup on error.
 - Phase 2.1 (partial — spec artifact only): `runPlanDraft` extracted; `plan-draft-prompt.md` instructs agent to write `docs/specs/issue-{id}.md` with a mandatory non-empty "Requirements covered" section citing PRD passages and commit it; validated end-to-end via issue-2. Draft PR step deferred to Phase 4.1 (belongs in mode B).
 - Phase 3.1: `src/labels.ts` defines the full label taxonomy (`LABELS` + `Label` type); `src/labelMachine.ts` defines `TRANSITIONS` (happy-path chain, each `from`/`to` unique), `applyTransition` (idempotent, no-op on wrong state), `parkIssue`, `resumeFromPark`; 13 tests directly prove single-trigger and no-double-dispatch invariants, idempotency, and the full happy-path chain.
+- Phase 3.2: 4 workflow YAMLs in `.github/workflows/` (`derive-graph`, `draft-plan`, `implement`, `verify`), each triggered by exactly one label event matching the TRANSITIONS table; 4 entrypoint scripts in `.github/scripts/` calling the corresponding `src/` functions; label updates in YAML steps (`--add-label`/`--remove-label`) keep state entirely in GitHub; park-on-failure step in every workflow; 12 tests verify trigger labels, target labels, and failure parks.
 
 ## Next task
-Phase 3.2 — one workflow per phase.
-AC: a task advances across workflow runs with state held only in GitHub.
+Phase 3.3 — Sandcastle-in-runner.
+AC: a task completes identically local vs. Actions on the same input.
 
 ## Notes
 - Build plan reordered 2026-06-22: gates (originally Phase 2.2–2.7) moved to Phase 4, to be wired into the Actions model Phase 3 establishes. Sequencing rationale in `docs/build-plan.md`.
