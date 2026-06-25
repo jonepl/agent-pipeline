@@ -36,6 +36,11 @@ Then tell me the current phase and next task.
    npx sandcastle docker build-image
 ```
 
+4. Create the required GitHub labels in the repo (idempotent — safe to re-run):
+```bash
+   bash scripts/create-labels.sh
+```
+
 ## Usage (Mode A — local)
 
 ```bash

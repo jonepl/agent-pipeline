@@ -26,7 +26,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm ci
+      
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Sandcastle Docker image
+        run: npx sandcastle docker build-image
 
       - name: Run implementer and reviewer in sandbox
         run: npx tsx .github/scripts/implement.mts

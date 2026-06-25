@@ -25,7 +25,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm ci
+      
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Sandcastle Docker image
+        run: npx sandcastle docker build-image
 
       # Verification agent (Phase 4.5) — wired here once implemented.
       - name: Run verify agent
