@@ -13,12 +13,14 @@ export type RunPlanDraftOptions = {
   readonly agent: AgentProvider;
   readonly prdPath: string;
   readonly hooks?: SandboxHooks;
+  /** Env vars injected into the Docker container at sandbox start time. */
+  readonly sandboxEnv?: Record<string, string>;
 };
 
 export async function runPlanDraft(opts: RunPlanDraftOptions): Promise<PlanDraftResult> {
   const sandbox = await sandcastle.createSandbox({
     branch: opts.issue.branch,
-    sandbox: docker(),
+    sandbox: docker({ env: opts.sandboxEnv }),
     hooks: opts.hooks,
   });
 

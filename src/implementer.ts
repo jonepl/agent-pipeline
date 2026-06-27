@@ -14,12 +14,14 @@ export type RunImplementOptions = {
   readonly reviewerAgent: AgentProvider;
   readonly hooks?: SandboxHooks;
   readonly copyToWorktree?: string[];
+  /** Env vars injected into the Docker container at sandbox start time. */
+  readonly sandboxEnv?: Record<string, string>;
 };
 
 export async function runImplement(opts: RunImplementOptions): Promise<ImplementResult> {
   const sandbox = await sandcastle.createSandbox({
     branch: opts.issue.branch,
-    sandbox: docker(),
+    sandbox: docker({ env: opts.sandboxEnv }),
     hooks: opts.hooks,
     copyToWorktree: opts.copyToWorktree,
   });

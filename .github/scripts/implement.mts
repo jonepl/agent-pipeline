@@ -7,14 +7,15 @@ const issueTitle = process.env["ISSUE_TITLE"] ?? "";
 
 if (!issueId) throw new Error("ISSUE_NUMBER env var is required");
 
-const sandcastleEnv = {
+const sandboxEnv = {
+  CLAUDE_CODE_OAUTH_TOKEN: process.env["CLAUDE_CODE_OAUTH_TOKEN"] ?? "",
   GH_TOKEN: process.env["GH_TOKEN"] ?? "",
   GH_HOST: process.env["GH_HOST"] ?? "github.com",
-  CLAUDE_CODE_OAUTH_TOKEN: process.env.CLAUDE_CODE_OAUTH_TOKEN ?? '',
 };
 
 await runImplement({
   issue: { id: issueId, title: issueTitle, branch: issueBranchName(issueId) },
-  implementerAgent: sandcastle.claudeCode("claude-opus-4-8", { env: sandcastleEnv }),
-  reviewerAgent: sandcastle.claudeCode("claude-sonnet-4-6", { env: sandcastleEnv }),
+  implementerAgent: sandcastle.claudeCode("claude-opus-4-8"),
+  reviewerAgent: sandcastle.claudeCode("claude-sonnet-4-6"),
+  sandboxEnv,
 });
