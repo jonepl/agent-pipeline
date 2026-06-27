@@ -8,7 +8,12 @@ const K = Number(process.env["PIPELINE_K"] ?? "1");
 
 const issues = await runPlanner({
   K,
-  agent: sandcastle.claudeCode("claude-opus-4-8"),
+  agent: sandcastle.claudeCode("claude-opus-4-8", {
+    env: {
+      GH_TOKEN: process.env["GH_TOKEN"] ?? "",
+      GH_HOST: process.env["GH_HOST"] ?? "github.com",
+    },
+  }),
 });
 
 for (const issue of issues) {

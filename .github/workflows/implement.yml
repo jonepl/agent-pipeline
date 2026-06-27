@@ -38,6 +38,8 @@ jobs:
 
       - name: Advance to verifying
         if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh issue edit "$ISSUE_NUMBER" \
             --add-label "verifying" \
@@ -45,6 +47,8 @@ jobs:
 
       - name: Park on failure
         if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh issue edit "$ISSUE_NUMBER" --add-label "needs-human"
           gh issue comment "$ISSUE_NUMBER" \
