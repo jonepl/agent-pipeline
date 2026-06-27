@@ -14,6 +14,7 @@ await runPlanDraft({
     env: {
       GH_TOKEN: process.env["GH_TOKEN"] ?? "",
       GH_HOST: process.env["GH_HOST"] ?? "github.com",
+      CLAUDE_CODE_OAUTH_TOKEN: process.env.CLAUDE_CODE_OAUTH_TOKEN ?? '',
     },
   }),
   prdPath,
