@@ -42,3 +42,9 @@ Update `ai/status.md`:
 - Move the completed task to **Done**.
 - Set **Next task** to the next build-plan item.
 - Do not start the next task — stop and let the human review.
+
+## Sandcastle sandbox hygiene
+
+`runImplement` and `runPlanDraft` both close their sandbox in a `finally` block, so a clean Ctrl+C (SIGINT) will let the current operation finish and release the sandbox before the process exits. If the process is killed hard (SIGKILL, power loss, or a crash before the `finally` runs), orphaned resources may remain. Before restarting the pipeline after an unclean exit, check:
+- Orphaned worktrees: `.sandcastle/worktrees/`
+- Orphaned Docker containers: `docker ps -a --filter name=sandcastle`

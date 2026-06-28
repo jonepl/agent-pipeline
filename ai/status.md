@@ -2,7 +2,7 @@
 # Status
 
 ## Current phase
-Phase 3 — Polling loop (local always-on). Next task: Phase 3.5 — graceful shutdown.
+Phase 3 — Polling loop (local always-on) ✅ complete. Next phase: Phase 4 — Gates wired into polling loop.
 
 ## Done
 - pipeline-sandbox throwaway repo confirmed the reference loop end-to-end
@@ -20,6 +20,7 @@ Phase 3 — Polling loop (local always-on). Next task: Phase 3.5 — graceful sh
 - Phase 3.2 — Polling loop skeleton: src/poll.ts exports tick (PollDeps-injected cycle logic) and startPoll(config, deps) returning PollHandle {stop, done}; default deps use gh via execSync; 9 tests cover dispatch capping, in-flight accounting, deriveUnblocked delegation, and multi-cycle lifecycle; 70 tests pass.
 - Phase 3.3 — Gate checks: GhIssueWithLabels type; countInFlight replaced by listInFlightIssues (returns issues + labels, count derived from length); dispatchImplement / dispatchVerify / isPrMerged / closeIssue added to PollDeps; tick loops over in-flight issues and fires gate handlers (plan-approved → implement, verifying → verify, merged PR → close); makeDefaultDeps(config) replaces static DEFAULT_DEPS; 6 new gate tests; 76 tests pass.
 - Phase 3.4 — Entrypoint: src/index.ts loads config via loadConfig(), starts loop via startPoll(config) (real deps via default arg), wires SIGINT/SIGTERM to handle.stop(), awaits handle.done, logs startup message; package.json gains bin field and start script; 76 tests pass.
+- Phase 3.5 — Graceful shutdown: verified that runImplement and runPlanDraft already close their sandboxes in finally blocks; SIGINT sets running=false and the in-progress operation finishes its finally before the process exits — no orphaned containers or worktrees on clean exit; sandbox hygiene note added to ai/rules.md; no code changes required; 76 tests pass.
 
 ## Pivot rationale
 Docker-in-CI auth intractable for solo dev setup. Pivoting to local 
@@ -27,9 +28,9 @@ always-on polling loop — simpler, no cloud ops, same GitHub label
 state machine. Actions support deferred to future phase.
 
 ## Next task
-Phase 3.5 — Graceful shutdown.
-SIGINT/SIGTERM stops the loop cleanly after the current cycle
-completes. AC: Ctrl+C exits without leaving orphaned sandboxes.
+Phase 4.1 — Evolving PR.
+Plan-draft step opens a PR on issue-{id} after committing the spec.
+AC: PR exists at awaiting-plan-approval after plan-draft runs.
 
 ## Known behavior (not bugs)
 - Issues not auto-closed after merge — manual gh issue close <n> 
