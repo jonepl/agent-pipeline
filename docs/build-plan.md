@@ -1,73 +1,89 @@
 # Build Plan — Multi-Agent Pipeline (Bootstrap)
 
-This plan decomposes the ADR into ordered, individually-verifiable tasks. **You build this with your current workflow** (Claude.ai plans, Claude Code implements) because the pipeline doesn't exist yet to build itself — it's a bootstrap, and a dry run of the workflow you're building.
+**Revised:** Pivoted to local always-on polling loop. GitHub Actions workflows removed from scope. The pipeline is a persistent `tsx` process on the developer's Mac.
 
-Each task lists an **acceptance criterion** (AC) and a **mode target** (A = local loop, B = Actions). Work them in order; phases gate on each other. Run Claude Code at the **pipeline repo root**.
-
-> **Sequencing principle:** the local loop (mode A) validates execution only. Gates are inherently event-driven and belong to mode B. Build the Actions model first, then wire the gates into it.
+Each task has an **acceptance criterion** (AC). Work in order; phases gate on each other. Run Claude Code at the pipeline repo root.
 
 ---
 
 ## Phase 0 — Repo & scaffold ✅
+- **0.1** Repo created, ADR committed.
+- **0.2** Sandcastle scaffold validated end-to-end (pipeline-sandbox).
+- **0.3** ACS files established (`CLAUDE.md`, `ai/rules.md`, `ai/status.md`, README).
 
-- **0.1 Create the pipeline repo.** AC: empty repo with `docs/adr/0001-...md` committed.
-- **0.2 Scaffold Sandcastle.** AC: `.sandcastle/main.mts` runs end-to-end against a throwaway test repo with at least one issue.
-- **0.3 Establish ACS files.** AC: `ai/rules.md` and `ai/status.md` exist; cold-start prompt documented in the README.
+## Phase 1 — Execution layer ✅
+- **1.1** `runAgent` wrapper extracted. Template loop works through `runAgent`.
+- **1.2** Planner prompt adapted. Emits unblocked set capped at `K`.
+- **1.3** Deterministic branch naming. `issue-{id}` is a code-level invariant.
+- **1.4** `runImplement` extracted. Implementer + reviewer run in isolated sandbox.
 
-## Phase 1 — Mode A: local loop (adapt the template) ✅
+## Phase 2 — Plan-as-spec artifact ✅ (partial)
+- **2.1** Plan agent writes spec with "Requirements covered" section, commits to `issue-{id}`. AC: spec file present; covered-requirements non-empty. *(Spec artifact validated; PR gate deferred to Phase 4.)*
 
-- **1.1 Extract `runAgent`.** AC: the template loop works through `runAgent`. *(Mode A)*
-- **1.2 Adapt the planner prompt.** AC: given a seeded dependency graph, the planner emits exactly the unblocked set, capped at `K`. *(Mode A)*
-- **1.3 Deterministic branch naming.** AC: re-planning the same issue yields the same `issue-{id}` branch and preserves accumulated commits. *(Mode A)*
-- **1.4 Local implement step.** AC: an approved issue produces code commits on its branch in an isolated sandbox. *(Mode A)*
+## Phase 3 — Polling loop (replaces Actions)
 
-## Phase 2 — Plan-as-spec artifact (mode A, no gates)
+> This phase replaces the GitHub Actions event-driven model. The polling loop is the orchestrator.
 
-- **2.1 Plan-as-spec artifact.** *(Partially complete)* Plan agent writes a spec with a **"Requirements covered"** section pointing to PRD passages, commits it to `issue-{id}`. AC: spec file present on branch; covered-requirements section non-empty. *(Mode A)*
-  > Note: the draft PR step in the prompt is deferred — PRs as a gate mechanism belong to mode B. The spec artifact itself is validated.
+- **3.1** **Config surface.** A single config file (`pipeline.config.ts` or `pipeline.config.json`) holds all autonomy toggles: `K`, `pollIntervalMs`, `prdPath`, `selfHeal`, `selfHealBudget`, `redispatch`, model assignments, label names. AC: changing a config value changes pipeline behavior with no code edit.
 
-## Phase 3 — Mode B: port to GitHub Actions (event-driven)
+- **3.2** **Polling loop skeleton.** A `src/poll.ts` module exports `startPoll(config)` — wakes every `pollIntervalMs`, reads all open `ready` issues via `gh`, runs graph derivation, identifies unblocked issues up to `K − in-flight`, dispatches ready work, sleeps. AC: with one `ready` issue, the loop wakes, derives the graph, and logs the unblocked set on each cycle.
 
-> Gates are built here, not in Phase 2. The local loop validates execution; Actions is where human gates live.
+- **3.3** **Label state checks in the loop.** On each cycle, the loop reads current labels for all in-flight issues and dispatches the next step if the gate signal is present (`plan-approved` → dispatch implement; `verifying` → dispatch verify; merged PR → close issue + re-derive). AC: applying `plan-approved` label causes implement to dispatch on the next poll cycle.
 
-- **3.1 Label state machine.** Implement the full label taxonomy + transitions. AC: each transition is driven by exactly one event/label and is idempotent (no double-dispatch). *(Mode B)*
-- **3.2 One workflow per phase.** Split graph-derivation / plan-draft / implement / verify into separate workflows triggered by labels and merge/issue events. AC: a task advances across workflow runs with state held only in GitHub. *(Mode B)*
-- **3.3 Sandcastle-in-runner.** Run the same `runAgent` path inside each Actions job (Docker-in-runner). AC: a task completes identically local vs. Actions on the same input. *(Mode B)*
-- **3.4 Concurrency cap in derivation.** Emit `≤ K − in-flight` per round. AC: with `K=1`, never more than one PR in flight. *(Mode B)*
-- **3.5 Merge → re-plan trigger.** AC: merging a PR closes its issue and re-runs graph derivation, unblocking dependents. *(Mode B)*
+- **3.4** **Entrypoint.** `src/index.ts` (or `bin/pipeline.ts`) loads config, calls `startPoll`. Becomes the `main` field of the npm package. AC: `npx agent-pipeline` starts the loop against the consuming repo's config.
 
-## Phase 4 — Gates (wired into Actions)
+- **3.5** **Graceful shutdown.** `SIGINT`/`SIGTERM` stops the loop cleanly after the current cycle completes. AC: `Ctrl+C` exits without leaving orphaned sandboxes.
 
-> These tasks were originally Phase 2. They are built here because gates require the event-driven model Phase 3 establishes.
+## Phase 4 — Gates wired into polling loop
 
-- **4.1 Evolving PR.** Open one PR per issue on the plan-draft workflow; spec committed before code. AC: PR exists at `awaiting-plan-approval` after plan-draft workflow runs. *(Mode B)*
-- **4.2 Plan-approval gate.** `plan-approved` label triggers the implement workflow; feedback comment triggers a stateless re-plan workflow that rewrites the spec. AC: rejection rewrites the spec; approval dispatches implement. *(Mode B)*
-- **4.3 Repo verify contract + path-scoping.** Read the project's declared `build/test/lint/typecheck`; run only the affected subproject by changed paths. AC: regression runs green on a no-op change; red on a seeded break. *(Mode B)*
-- **4.4 Regression as fail-fast gate.** AC: no agent step runs while regression is red. *(Mode B)*
-- **4.5 Post-hoc verify agent.** Exercise behavior + audit acceptance criteria; post results to the PR. AC: a spec-violating diff is flagged; a compliant one passes. *(Mode B)*
-- **4.6 Advisory review (non-blocking).** AC: review comments post to the PR but never block merge. *(Mode B)*
+- **4.1** **Evolving PR.** Plan-draft step opens a PR on `issue-{id}` after committing the spec. AC: PR exists at `awaiting-plan-approval` after plan-draft runs.
 
-## Phase 5 — Failure handling & the autonomy dial
+- **4.2** **Plan-approval gate.** Loop checks for `plan-approved` label on `awaiting-plan-approval` issues. If present, dispatches implement. If a feedback comment exists on the PR without `plan-approved`, dispatches re-plan. AC: applying `plan-approved` label → implement dispatches on next cycle; leaving feedback without label → re-plan runs.
 
-- **5.1 Park policy + `needs-human` inbox.** AC: every park reason lands the issue/PR in `needs-human` with a reason logged. *(Mode B)*
-- **5.2 Self-heal exceptions (budget 1 + log).** AC: a regression/verification failure self-heals once, logs the attempt, parks on a second failure. *(Mode B)*
-- **5.3 Per-issue cost/attempt budget.** AC: exhausting the budget parks regardless of failure type. *(Mode B)*
-- **5.4 Hand-fix recovery.** AC: dropping `needs-human` re-enters the gate chain at regression. *(Mode B)*
-- **5.5 `redispatch` toggle (off by default).** AC: enabling the toggle + a guidance comment re-runs implement with steer. *(Mode B)*
-- **5.6 Single config surface.** All autonomy toggles (`K`, self-heal on/off, budget, re-dispatch, model assignment, PRD path, labels) in one config file. AC: changing a toggle changes behavior with no code edit. *(Mode B)*
+- **4.3** **Repo verify contract + path-scoping.** Read the project's declared `build/test/lint/typecheck`; run only affected subproject by changed paths. AC: regression runs green on no-op change; red on seeded break.
+
+- **4.4** **Regression as fail-fast gate.** AC: no agent step runs while regression is red.
+
+- **4.5** **Post-hoc verify agent.** Exercises behavior + audits acceptance criteria; posts results to PR. AC: spec-violating diff is flagged; compliant one passes.
+
+- **4.6** **Advisory review (non-blocking).** AC: review comments post to PR but never block.
+
+- **4.7** **Merge detection.** Loop detects merged PR (poll GitHub PR state), closes issue, re-derives graph on next cycle. AC: merging a PR closes the issue and unblocks dependents on next cycle.
+
+## Phase 5 — Failure handling & autonomy dial
+
+- **5.1** **Park policy + `needs-human` inbox.** AC: every blocking failure labels issue/PR `needs-human` with reason logged.
+
+- **5.2** **Self-heal exceptions (budget 1 + log).** AC: regression/verification failure self-heals once, logs attempt, parks on second failure.
+
+- **5.3** **Per-issue cost/attempt budget.** AC: exhausting budget parks regardless of failure type.
+
+- **5.4** **Hand-fix recovery.** AC: dropping `needs-human` re-enters gate chain at regression.
+
+- **5.5** **`redispatch` toggle (off by default).** AC: enabling toggle + guidance comment re-runs implement with steer.
 
 ## Phase 6 — Packaging for reuse
 
-- **6.1 Publish the npm package** (local harness + shared logic + prompts). AC: a second repo can `npm i -D` and run mode A. *(Mode A+B)*
-- **6.2 Reusable Actions workflows** (`workflow_call`). AC: a caller workflow in another repo runs the pipeline via `uses:`. *(Mode B)*
-- **6.3 Onboarding checklist validated end-to-end** on one real consuming repo. AC: a fresh project reaches a first human-merged PR. *(Mode A+B)*
+- **6.1** **Publish npm package.** AC: a second repo can `npm i -D @you/agent-pipeline` and run the polling loop against its own config and Issues.
+
+- **6.2** **Onboarding checklist validated** end-to-end on one real consuming repo (Rental Buddy). AC: fresh project files a `ready` issue and reaches a human-merged PR.
 
 ---
 
-**Definition of done for the bootstrap:** a consuming repo can file a `ready` issue and reach a human-merged PR, fully through Actions, with `K=1` and park-by-default — and the same flow is reproducible locally via mode A.
+## Definition of done
+
+A consuming repo can file a `ready` issue, leave the Mac running, and reach a human-merged PR with `K=1` and park-by-default — reviewing plan and code from GitHub mobile.
 
 ---
 
-## Sequencing rationale (added after Phase 1 validation)
+## Sequencing rationale
 
-The original plan ordered gates (Phase 2) before Actions (Phase 3). That was wrong: gates are inherently event-driven and cannot be meaningfully built into the continuous local loop. The local loop validates the execution layer only. The reordered plan builds Actions first (Phase 3), then wires gates into Actions (Phase 4). Phase 2 is retained as a stub for the spec artifact work that *is* mode-A compatible.
+Original Phase 3 (GitHub Actions) replaced by a local polling loop after Docker-in-CI auth proved intractable. The polling loop is simpler, requires no cloud infrastructure, and is fully consistent with the always-on Mac assumption. GitHub Actions support is deferred to a future phase once the local pipeline is proven.
+
+## What to do with existing Phase 3 work (Actions workflows)
+
+The four workflow YAMLs and entrypoint scripts built in Phases 3.1–3.2 are no longer on the critical path. Options:
+- **Delete them** to reduce confusion (recommended for now).
+- **Archive them** in `docs/archive/actions/` as a reference for future mode B work.
+
+The label state machine (`src/labels.ts`, `src/labelMachine.ts`) is fully reusable — keep it.
