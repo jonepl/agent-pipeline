@@ -49,3 +49,6 @@ npx tsx .sandcastle/main.mts
 
 Reads open `ready`-labeled issues from this repo's GitHub Issues, 
 derives the dependency graph, and runs the pipeline locally.
+
+
+- If Docker was restarted, rebuild the image: `npx sandcastle docker build-image`

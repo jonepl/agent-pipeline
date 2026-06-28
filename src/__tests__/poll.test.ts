@@ -16,6 +16,8 @@ function makeDeps(overrides: Partial<PollDeps> = {}): PollDeps {
     dispatch: async () => {},
     dispatchImplement: async () => {},
     dispatchVerify: async () => {},
+    hasFeedbackComments: async () => false,
+    dispatchRePlan: async () => {},
     isPrMerged: async () => false,
     closeIssue: async () => {},
     log: () => {},
@@ -195,6 +197,54 @@ describe("tick — gate checks", () => {
       }),
     );
     expect(closed).toBeUndefined();
+  });
+
+  it("dispatches re-plan when issue has awaiting-plan-approval, no plan-approved, and has feedback", async () => {
+    let rePlanned: GhIssue | undefined;
+    await tick(
+      DEFAULT_CONFIG,
+      makeDeps({
+        listInFlightIssues: async () => [
+          withLabels(11, [DEFAULT_CONFIG.labels.awaitingPlanApproval]),
+        ],
+        hasFeedbackComments: async () => true,
+        dispatchRePlan: async (i) => { rePlanned = i; },
+      }),
+    );
+    expect(rePlanned?.number).toBe(11);
+  });
+
+  it("does not dispatch re-plan when there are no feedback comments", async () => {
+    let rePlanned: GhIssue | undefined;
+    await tick(
+      DEFAULT_CONFIG,
+      makeDeps({
+        listInFlightIssues: async () => [
+          withLabels(11, [DEFAULT_CONFIG.labels.awaitingPlanApproval]),
+        ],
+        hasFeedbackComments: async () => false,
+        dispatchRePlan: async (i) => { rePlanned = i; },
+      }),
+    );
+    expect(rePlanned).toBeUndefined();
+  });
+
+  it("does not dispatch re-plan when plan-approved label is present", async () => {
+    let rePlanned: GhIssue | undefined;
+    await tick(
+      DEFAULT_CONFIG,
+      makeDeps({
+        listInFlightIssues: async () => [
+          withLabels(11, [
+            DEFAULT_CONFIG.labels.awaitingPlanApproval,
+            DEFAULT_CONFIG.labels.planApproved,
+          ]),
+        ],
+        hasFeedbackComments: async () => true,
+        dispatchRePlan: async (i) => { rePlanned = i; },
+      }),
+    );
+    expect(rePlanned).toBeUndefined();
   });
 
   it("triggers no dispatch for an in-flight issue with no gate signal", async () => {

@@ -1,5 +1,10 @@
 import { execSync } from "node:child_process";
+import { claudeCode } from "@ai-hero/sandcastle";
 import type { PipelineConfig } from "./config.js";
+import { runPlanDraft, ghOpenPr, type PrInfo } from "./planDrafter.js";
+import { runImplement } from "./implementer.js";
+import { issueBranchName } from "./branchName.js";
+import type { PlanIssue } from "./planner.js";
 
 export type GhIssue = {
   readonly number: number;
@@ -17,6 +22,8 @@ export type PollDeps = {
   readonly dispatch: (issue: GhIssue) => Promise<void>;
   readonly dispatchImplement: (issue: GhIssue) => Promise<void>;
   readonly dispatchVerify: (issue: GhIssue) => Promise<void>;
+  readonly hasFeedbackComments: (issue: GhIssue) => Promise<boolean>;
+  readonly dispatchRePlan: (issue: GhIssue) => Promise<void>;
   readonly isPrMerged: (issue: GhIssue) => Promise<boolean>;
   readonly closeIssue: (issue: GhIssue) => Promise<void>;
   readonly log: (msg: string) => void;
@@ -73,6 +80,38 @@ function ghCloseIssue(issue: GhIssue): Promise<void> {
   return Promise.resolve();
 }
 
+function ghLabelIssue(
+  issue: GhIssue,
+  add: readonly string[],
+  remove: readonly string[],
+): void {
+  const parts: string[] = [];
+  if (add.length > 0) parts.push(`--add-label "${add.join(",")}"`);
+  if (remove.length > 0) parts.push(`--remove-label "${remove.join(",")}"`);
+  if (parts.length > 0) execSync(`gh issue edit ${issue.number} ${parts.join(" ")}`);
+}
+
+function ghHasFeedbackComments(issue: GhIssue): Promise<boolean> {
+  try {
+    const raw = execSync(
+      `gh pr view "issue-${issue.number}" --json comments`,
+      { encoding: "utf8" },
+    );
+    const { comments } = JSON.parse(raw) as { comments: unknown[] };
+    return Promise.resolve(comments.length > 0);
+  } catch {
+    return Promise.resolve(false);
+  }
+}
+
+function ghFetchPr(branch: string): Promise<PrInfo> {
+  const raw = execSync(
+    `gh pr view "${branch}" --json number,url`,
+    { encoding: "utf8" },
+  );
+  return Promise.resolve(JSON.parse(raw) as PrInfo);
+}
+
 function makeDefaultDeps(config: PipelineConfig): PollDeps {
   const inFlightLabels = new Set([
     config.labels.readyToPlan,
@@ -82,20 +121,84 @@ function makeDefaultDeps(config: PipelineConfig): PollDeps {
     config.labels.awaitingMerge,
   ]);
 
+  const sandboxEnv: Record<string, string> = {};
+  for (const key of ["CLAUDE_CODE_OAUTH_TOKEN", "GH_TOKEN", "GH_HOST"]) {
+    const val = process.env[key];
+    if (val !== undefined) sandboxEnv[key] = val;
+  }
+
+  function toPlanIssue(issue: GhIssue): PlanIssue {
+    const id = String(issue.number);
+    return { id, title: issue.title, branch: issueBranchName(id) };
+  }
+
   return {
     listReadyIssues: ghListReady,
     listInFlightIssues: () => ghListInFlight(inFlightLabels),
     deriveUnblocked: (issues) => Promise.resolve(issues),
-    dispatch: () => Promise.resolve(),
-    // Phase 3.4 (entrypoint) wires real agent calls here.
-    dispatchImplement: (issue) => {
-      console.log(`[poll] plan-approved gate: #${issue.number} queued for implement`);
-      return Promise.resolve();
+
+    dispatch: async (issue) => {
+      const planIssue = toPlanIssue(issue);
+      ghLabelIssue(issue, [config.labels.readyToPlan], [config.labels.ready]);
+      try {
+        await runPlanDraft({
+          issue: planIssue,
+          agent: claudeCode(config.models.planDrafter),
+          prdPath: config.prdPath,
+          openPr: ghOpenPr(config.labels.awaitingPlanApproval),
+          sandboxEnv,
+        });
+        ghLabelIssue(issue, [config.labels.awaitingPlanApproval], [config.labels.readyToPlan]);
+      } catch (err) {
+        ghLabelIssue(issue, [config.labels.needsHuman], [config.labels.readyToPlan]);
+        console.error(`[poll] plan-draft failed for #${issue.number}: ${String(err)}`);
+      }
     },
+
+    dispatchImplement: async (issue) => {
+      const planIssue = toPlanIssue(issue);
+      try {
+        const result = await runImplement({
+          issue: planIssue,
+          implementerAgent: claudeCode(config.models.implementer),
+          reviewerAgent: claudeCode(config.models.reviewer),
+          sandboxEnv,
+        });
+        if (result.commits.length === 0) {
+          ghLabelIssue(issue, [config.labels.needsHuman], [config.labels.planApproved]);
+          console.log(`[poll] implement for #${issue.number} produced no commits — needs-human`);
+        } else {
+          ghLabelIssue(issue, [config.labels.verifying], [config.labels.planApproved]);
+        }
+      } catch (err) {
+        ghLabelIssue(issue, [config.labels.needsHuman], []);
+        console.error(`[poll] implement failed for #${issue.number}: ${String(err)}`);
+      }
+    },
+
     dispatchVerify: (issue) => {
       console.log(`[poll] verifying gate: #${issue.number} queued for verify`);
       return Promise.resolve();
     },
+
+    hasFeedbackComments: ghHasFeedbackComments,
+
+    dispatchRePlan: async (issue) => {
+      const planIssue = toPlanIssue(issue);
+      try {
+        await runPlanDraft({
+          issue: planIssue,
+          agent: claudeCode(config.models.planDrafter),
+          prdPath: config.prdPath,
+          openPr: (pi) => ghFetchPr(pi.branch),
+          sandboxEnv,
+        });
+      } catch (err) {
+        ghLabelIssue(issue, [config.labels.needsHuman], []);
+        console.error(`[poll] re-plan failed for #${issue.number}: ${String(err)}`);
+      }
+    },
+
     isPrMerged: ghIsPrMerged,
     closeIssue: ghCloseIssue,
     log: console.log,
@@ -127,6 +230,13 @@ export async function tick(config: PipelineConfig, deps: PollDeps): Promise<void
     ) {
       deps.log(`[poll] gate: plan-approved on #${issue.number} — dispatching implement`);
       await deps.dispatchImplement(issue);
+    } else if (
+      issue.labels.includes(config.labels.awaitingPlanApproval) &&
+      !issue.labels.includes(config.labels.planApproved) &&
+      (await deps.hasFeedbackComments(issue))
+    ) {
+      deps.log(`[poll] gate: feedback on #${issue.number} — re-dispatching plan-draft`);
+      await deps.dispatchRePlan(issue);
     } else if (issue.labels.includes(config.labels.verifying)) {
       deps.log(`[poll] gate: verifying on #${issue.number} — dispatching verify`);
       await deps.dispatchVerify(issue);
