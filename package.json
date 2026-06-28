@@ -3,11 +3,15 @@
   "version": "1.0.0",
   "description": "Shared orchestration pipeline tool",
   "type": "module",
+  "bin": {
+    "agent-pipeline": "./dist/index.js"
+  },
   "scripts": {
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "lint": "eslint src"
+    "lint": "eslint src",
+    "start": "npx tsx src/index.ts"
   },
   "keywords": [],
   "author": "",
