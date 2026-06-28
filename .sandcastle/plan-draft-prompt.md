@@ -8,6 +8,15 @@ the remote. Always pass `-R jonepl/agent-pipeline` to every `gh` command.
 Plain `git` commands (add, commit, push) work normally from
 `/home/agent/workspace`.
 
+# STEP 0 — Configure git credentials
+
+The container does not have SSH push access. Set up HTTPS push via the
+injected `GH_TOKEN` before doing anything else:
+
+```sh
+git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/jonepl/agent-pipeline.git"
+```
+
 # STEP 1 — Read the issue
 
 ```sh

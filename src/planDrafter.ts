@@ -36,6 +36,16 @@ export function ghOpenPr(label: string): (issue: PlanIssue) => Promise<PrInfo> {
     if (existing.length > 0) {
       return Promise.resolve({ url: existing[0]!.url, number: existing[0]!.number });
     }
+    try {
+      execSync(
+        `gh api repos/jonepl/agent-pipeline/branches/${issue.branch}`,
+        { encoding: "utf8", stdio: "pipe" },
+      );
+    } catch {
+      throw new Error(
+        `branch "${issue.branch}" does not exist on GitHub — agent push likely failed`,
+      );
+    }
     const url = execSync(
       `gh pr create --title "Plan: ${issue.title}" --head "${issue.branch}" --label "${label}" --body "Spec draft for #${issue.id}"`,
       { encoding: "utf8" },
