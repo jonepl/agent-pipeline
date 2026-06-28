@@ -2,7 +2,7 @@
 # Status
 
 ## Current phase
-Phase 3 — Polling loop (local always-on) ✅ complete. Next phase: Phase 4 — Gates wired into polling loop.
+Phase 4 — Gates wired into polling loop (in progress).
 
 ## Done
 - pipeline-sandbox throwaway repo confirmed the reference loop end-to-end
@@ -27,10 +27,12 @@ Docker-in-CI auth intractable for solo dev setup. Pivoting to local
 always-on polling loop — simpler, no cloud ops, same GitHub label 
 state machine. Actions support deferred to future phase.
 
+- Phase 4.1 — Evolving PR: runPlanDraft gains openPr dep (PrInfo type, ghOpenPr production helper); after agent commits spec, calls openPr(issue) and returns pr in PlanDraftResult; 3 new tests; 79 tests pass.
+- Phase 4.2 — Dispatch wiring: makeDefaultDeps in poll.ts wired with real runPlanDraft (dispatch) and runImplement (dispatchImplement); label transitions via ghLabelIssue (gh issue edit); sandboxEnv built from process.env; re-plan gate added to tick (hasFeedbackComments + dispatchRePlan deps); ghHasFeedbackComments checks PR comments via gh pr view; ghFetchPr used for re-plan openPr to return existing PR; 3 new gate tests; 82 tests pass.
+- Worktree fix — plan-draft-prompt.md updated to add -R jonepl/agent-pipeline to all gh commands and git push before PR creation; ISSUE_NUMBER added as promptArg in planDrafter.ts; ghOpenPr updated to get-or-create (checks gh pr list before creating) so agent-opened PRs are not duplicated; all tests pass.
+
 ## Next task
-Phase 4.1 — Evolving PR.
-Plan-draft step opens a PR on issue-{id} after committing the spec.
-AC: PR exists at awaiting-plan-approval after plan-draft runs.
+Validate plan-draft end-to-end with a fresh issue: file a ready issue, run npx tsx src/index.ts, confirm spec committed on issue branch and draft PR opened.
 
 ## Known behavior (not bugs)
 - Issues not auto-closed after merge — manual gh issue close <n> 

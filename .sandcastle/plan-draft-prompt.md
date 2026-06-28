@@ -1,11 +1,17 @@
 # TASK
 
-Draft the implementation spec for issue {{ISSUE_ID}}: {{ISSUE_TITLE}}.
+Draft the implementation spec for issue {{ISSUE_NUMBER}}: {{ISSUE_TITLE}}.
+
+**Important context:** You are running inside a Sandcastle worktree. The
+`.git` entry is a file pointer, not a full clone, so `gh` cannot auto-detect
+the remote. Always pass `-R jonepl/agent-pipeline` to every `gh` command.
+Plain `git` commands (add, commit, push) work normally from
+`/home/agent/workspace`.
 
 # STEP 1 — Read the issue
 
 ```sh
-gh issue view {{ISSUE_ID}}
+gh issue view {{ISSUE_NUMBER}} -R jonepl/agent-pipeline
 ```
 
 Pull in all comments too; they may contain clarifications from the human reviewer.
@@ -50,22 +56,28 @@ git add docs/specs/issue-{{ISSUE_ID}}.md
 git commit -m "spec: draft spec for issue-{{ISSUE_ID}}"
 ```
 
-# STEP 5 — Open an evolving PR
+# STEP 5 — Push the branch and open a draft PR
+
+Push the branch:
+
+```sh
+git push origin issue-{{ISSUE_NUMBER}}
+```
 
 Check whether a PR already exists for this branch:
 
 ```sh
-gh pr list --head {{BRANCH}} --state open --json number --jq 'length'
+gh pr list --head {{BRANCH}} --state open --json number --jq 'length' -R jonepl/agent-pipeline
 ```
 
 If the result is `0`, open one:
 
 ```sh
-gh pr create \
-  --title "issue-{{ISSUE_ID}}: {{ISSUE_TITLE}}" \
-  --body "Implementation spec for review. Code commits follow after plan approval." \
+gh pr create -R jonepl/agent-pipeline \
   --draft \
-  --head {{BRANCH}}
+  --head {{BRANCH}} \
+  --title "issue-{{ISSUE_NUMBER}}: {{ISSUE_TITLE}}" \
+  --body "Implementation spec for review. Code commits follow after plan approval."
 ```
 
 If a PR already exists, skip this step.
