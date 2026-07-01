@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { multiply, divide } from "../utils.js";
+import { multiply, divide, subtract } from "../utils.js";
 
 describe("multiply", () => {
   it("returns the product of two numbers", () => {
@@ -12,6 +12,20 @@ describe("multiply", () => {
 
   it("returns zero when an operand is zero", () => {
     expect(multiply(0, 5)).toBe(0);
+  });
+});
+
+describe("subtract", () => {
+  it("returns the difference of two numbers", () => {
+    expect(subtract(10, 3)).toBe(7);
+  });
+
+  it("handles negative results", () => {
+    expect(subtract(3, 10)).toBe(-7);
+  });
+
+  it("handles negative operands", () => {
+    expect(subtract(-4, -2)).toBe(-2);
   });
 });
 
